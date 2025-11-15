@@ -1,4 +1,4 @@
-name: Build and Publish FNPACK Package
+name: Build and Publish FNPACK Offline Package
 
 permissions:
   contents: write
