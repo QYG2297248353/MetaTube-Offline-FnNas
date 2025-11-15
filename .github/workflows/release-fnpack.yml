@@ -1,0 +1,62 @@
+name: Build and Publish FNPACK Package
+
+permissions:
+  contents: write
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-fnpack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify tag format
+        run: |
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag does not match vX.X.X format. Exiting."
+            exit 1
+          fi
+
+      - name: Download fnpack
+        run: |
+          curl -L -o fnpack-1.0.1-linux-amd64 https://static2.fnnas.com/fnpack/fnpack-1.0.1-linux-amd64
+          chmod +x fnpack-1.0.1-linux-amd64
+          sudo mv fnpack-1.0.1-linux-amd64 /usr/local/bin/fnpack
+
+      - name: Prepare source directory
+        run: |
+          SRC_DIR="src-temp"
+          mkdir -p "$SRC_DIR"
+          rsync -a --exclude='.git' ./ "$SRC_DIR/"
+          echo "SRC_DIR=$SRC_DIR" >> $GITHUB_ENV
+
+      - name: Build fpk
+        run: |
+          fnpack build -d "$SRC_DIR"
+          echo "Build finished. Searching for .fpk output..."
+          
+          FILE=$(find . -maxdepth 2 -type f -name "*.fpk" | head -n 1)
+          
+          if [ -z "$FILE" ]; then
+            echo "Error: no .fpk file generated!"
+            exit 1
+          fi
+          
+          echo "Found FPK: $FILE"
+          
+          cp "$FILE" /tmp/output.fpk
+          echo "FILE_PATH=/tmp/output.fpk" >> $GITHUB_ENV
+
+      - name: Upload .fpk to Release Assets
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ${{ env.FILE_PATH }}
+          asset_name: ${{ github.event.repository.name }}.fpk
+          asset_content_type: application/octet-stream

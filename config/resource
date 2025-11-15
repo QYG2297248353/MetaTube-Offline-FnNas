@@ -1,0 +1,22 @@
+{
+    "data-share": {
+        "shares": [
+            {
+                "name": "metatube",
+                "permission": {
+                    "rw": [
+                        "docker-ammds"
+                    ]
+                }
+            },
+            {
+                "name": "metatube/db",
+                "permission": {
+                    "rw": [
+                        "docker-ammds"
+                    ]
+                }
+            }
+        ]
+    }
+}

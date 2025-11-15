@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# 日志
+log_message() {
+    local message="$1"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    local log_line="${timestamp} [CONFIG_INIT] ${message}"
+    echo "${log_line}"
+    if [ -n "${TRIM_PKGTMP}" ]; then
+        mkdir -p "${TRIM_PKGTMP}"
+        echo "${log_line}" >> "${TRIM_PKGTMP}/config_init.log"
+    fi
+}
+
+# 基础信息
+log_message "==============配置开始=============="
+log_message "[系统] 运行用户: ${TRIM_RUN_USERNAME:-未设置}"
+log_message "[系统] 专用用户: ${TRIM_USERNAME:-未设置}"
+log_message "===================================="
+log_message "[应用] 名称: ${TRIM_APPNAME:-未设置}"
+log_message "[应用] 版本: ${TRIM_APPVER:-未设置}"
+log_message "[应用] 状态: ${TRIM_APP_STATUS:-未设置}"
+log_message "[应用] 端口: ${TRIM_SERVICE_PORT:-未设置}"
+log_message "[应用] 用户: ${TRIM_RUN_USERNAME:-未设置} (UID: ${TRIM_RUN_UID:-未设置})"
+log_message "===================================="
+log_message "[目录] 执行文件: ${TRIM_APPDEST:-未设置}"
+log_message "[目录] 配置文件: ${TRIM_PKGETC:-未设置}"
+log_message "[目录] 动态数据: ${TRIM_PKGVAR:-未设置}"
+log_message "[目录] 临时文件: ${TRIM_PKGTMP:-未设置}"
+log_message "[目录] 用户数据: ${TRIM_PKGHOME:-未设置}"
+log_message "[目录] 元数据: ${TRIM_PKGMETA:-未设置}"
+log_message "[目录] 存储空间: ${TRIM_APPDEST_VOL:-未设置}"
+log_message "[目录] 数据共享: ${TRIM_DATA_SHARE_PATHS:-未设置}"
+log_message "[目录] 系统日志文件: ${TRIM_TEMP_LOGFILE:-未设置}"
+log_message "[目录] 升级临时: ${TRIM_TEMP_UPGRADE_FOLDER:-未设置}"
+log_message "[目录] 安装临时: ${TRIM_PKGINST_TEMP_DIR:-未设置}"
+log_message "[目录] FPK解压: ${TRIM_TEMP_TPKFILE:-未设置}"
+log_message "===================================="
+log_message "[系统] 版本: ${TRIM_SYS_VERSION:-未设置}"
+log_message "[系统] 主版本: ${TRIM_SYS_VERSION_MAJOR:-未设置}"
+log_message "[系统] 次版本: ${TRIM_SYS_VERSION_MINOR:-未设置}"
+log_message "[系统] 构建版本: ${TRIM_SYS_VERSION_BUILD:-未设置}"
+log_message "[系统] 架构: ${TRIM_SYS_ARCH:-未设置}"
+log_message "[系统] 内核版本: ${TRIM_KERNEL_VERSION:-未设置}"
+log_message "[系统] 标识符: ${TRIM_SYS_MACHINE_ID:-未设置}"
+log_message "[系统] 语言: ${TRIM_SYS_LANGUAGE:-未设置}"
+log_message "===================================="
+log_message "==============配置开始=============="
+
+exit 0

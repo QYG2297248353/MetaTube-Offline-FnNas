@@ -1,0 +1,155 @@
+#!/bin/bash
+
+# 日志
+log_message() {
+    local message="$1"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    local log_line="${timestamp} [MAIN] ${message}"
+    echo "${log_line}"
+    if [ -n "${TRIM_PKGTMP}" ]; then
+        mkdir -p "${TRIM_PKGTMP}"
+        echo "${log_line}" >> "${TRIM_PKGTMP}/main.log"
+    fi
+}
+
+# 基础信息
+log_message "==============主程序=============="
+log_message "[系统] 运行用户: ${TRIM_RUN_USERNAME:-未设置}"
+log_message "[系统] 专用用户: ${TRIM_USERNAME:-未设置}"
+log_message "===================================="
+log_message "[应用] 名称: ${TRIM_APPNAME:-未设置}"
+log_message "[应用] 版本: ${TRIM_APPVER:-未设置}"
+log_message "[应用] 状态: ${TRIM_APP_STATUS:-未设置}"
+log_message "[应用] 端口: ${TRIM_SERVICE_PORT:-未设置}"
+log_message "[应用] 用户: ${TRIM_RUN_USERNAME:-未设置} (UID: ${TRIM_RUN_UID:-未设置})"
+log_message "===================================="
+log_message "[目录] 执行文件: ${TRIM_APPDEST:-未设置}"
+log_message "[目录] 配置文件: ${TRIM_PKGETC:-未设置}"
+log_message "[目录] 动态数据: ${TRIM_PKGVAR:-未设置}"
+log_message "[目录] 临时文件: ${TRIM_PKGTMP:-未设置}"
+log_message "[目录] 用户数据: ${TRIM_PKGHOME:-未设置}"
+log_message "[目录] 元数据: ${TRIM_PKGMETA:-未设置}"
+log_message "[目录] 存储空间: ${TRIM_APPDEST_VOL:-未设置}"
+log_message "[目录] 数据共享: ${TRIM_DATA_SHARE_PATHS:-未设置}"
+log_message "[目录] 系统日志文件: ${TRIM_TEMP_LOGFILE:-未设置}"
+log_message "[目录] 升级临时: ${TRIM_TEMP_UPGRADE_FOLDER:-未设置}"
+log_message "[目录] 安装临时: ${TRIM_PKGINST_TEMP_DIR:-未设置}"
+log_message "[目录] FPK解压: ${TRIM_TEMP_TPKFILE:-未设置}"
+log_message "===================================="
+log_message "[系统] 版本: ${TRIM_SYS_VERSION:-未设置}"
+log_message "[系统] 主版本: ${TRIM_SYS_VERSION_MAJOR:-未设置}"
+log_message "[系统] 次版本: ${TRIM_SYS_VERSION_MINOR:-未设置}"
+log_message "[系统] 构建版本: ${TRIM_SYS_VERSION_BUILD:-未设置}"
+log_message "[系统] 架构: ${TRIM_SYS_ARCH:-未设置}"
+log_message "[系统] 内核版本: ${TRIM_KERNEL_VERSION:-未设置}"
+log_message "[系统] 标识符: ${TRIM_SYS_MACHINE_ID:-未设置}"
+log_message "[系统] 语言: ${TRIM_SYS_LANGUAGE:-未设置}"
+log_message "===================================="
+log_message "==============主程序=============="
+
+LOG_FILE="${TRIM_PKGVAR}/info.log"
+PID_FILE="${TRIM_PKGVAR}/app.pid"
+
+export PATH=/var/apps/nodejs_v22/target/bin:$PATH
+# data directory to write note.txt
+DATA_DIR="${TRIM_DATA_SHARE_PATHS%%:*}"
+# write the command to start your program here 
+CMD="DATA_DIR=${DATA_DIR} PORT=5001 node ${TRIM_APPDEST}/server/server.js"
+
+start_process() {
+    if status; then
+        return 0
+    fi
+
+    log_msg "Starting process ..."
+    # env >> ${LOG_FILE}
+    # run the nodejs process
+    bash -c "${CMD}" >> ${LOG_FILE} 2>&1 &
+    # write pid to pidfile
+    printf "%s" "$!" > ${PID_FILE}
+    # log_msg "${CMD}"
+    # log_msg "pid = $!"
+    return 0
+}
+
+stop_process() {
+    log_msg "Stopping process ..."
+
+    if [ -r "${PID_FILE}" ]; then
+        pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+        
+        log_msg "pid=${pid}"
+        if ! check_process "${pid}"; then
+            # process not exist, delete pidfile
+            rm -f "${PID_FILE}"
+            log_msg "remove pid file 1"
+            return
+        fi
+
+        log_msg "send TERM signal to PID:${pid}..."
+        kill -TERM ${pid} >> ${LOG_FILE} 2>&1
+
+        local count=0
+        while check_process "${pid}" && [ $count -lt 10 ]; do
+            sleep 1
+            count=$((count + 1))
+            log_msg "waiting process terminal... (${count}s/10s)"
+        done
+
+        if check_process "${pid}"; then
+            log_msg "send KILL signal to PID:${pid}..."
+            kill -KILL "${pid}"
+            sleep 1
+            rm -f "${PID_FILE}"
+        else
+            log_msg "process killed... "
+        fi
+    fi
+
+    return 0
+}
+
+check_process() {
+    local pid=$1
+    if kill -0 "${pid}" 2>/dev/null; then
+        return 0  # process exist
+    else
+        return 1  # process not exist
+    fi
+}
+
+status() {
+    if [ -f "${PID_FILE}" ]; then
+        pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+        if check_process "${pid}"; then
+            return 0
+        else
+            # Process is not running but pidfile exists - clean it up
+            rm -f "${PID_FILE}"
+        fi    
+    fi
+
+    return 1
+}
+
+case $1 in
+start)
+    # run start command. exit 0 if success, exit 1 if failed
+    start_process
+    ;;
+stop)
+    # run stop command. exit 0 if success, exit 1 if failed
+    stop_process
+    ;;
+status)
+    # check application status command. exit 0 if running, exit 3 if not running
+    if status; then 
+        exit 0
+    else 
+        exit 3
+    fi
+    ;;
+*)
+    exit 1
+    ;;
+esac
