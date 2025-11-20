@@ -51,7 +51,7 @@ LOG_FILE="${TRIM_PKGVAR}/info.log"
 PID_FILE="${TRIM_PKGVAR}/app.pid"
 
 # 应用程序路径
-APP_BIN="${TRIM_APPDEST}/bin/metatube-amd64"
+APP_BIN="${TRIM_APPDEST}/bin/metatube"
 # 数据库路径
 DB_PATH="${TRIM_APPDEST_VOL}/@appshare/metatube/db/metatube.db"
 # 端口
