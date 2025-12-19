@@ -1,4 +1,4 @@
-name: Build and Publish FNPACK Offline Package
+name: Build and Publish FNPACK Package
 
 permissions:
   contents: write
@@ -10,47 +10,137 @@ on:
 jobs:
   build-fnpack:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Verify tag format
+      # 1️⃣ 校验 tag 并提取版本号
+      - name: Verify tag format and extract version
+        shell: bash
         run: |
-          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Tag does not match vX.X.X format. Exiting."
+          TAG="${GITHUB_REF_NAME}"
+
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Tag does not match vX.Y.Z format: $TAG"
             exit 1
           fi
 
+          VERSION="${TAG#v}"
+          echo "✅ Extracted version: $VERSION"
+
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      # 2️⃣ 下载核心文件
+      - name: Download and extract metatube backend
+        shell: bash
+        run: |
+          mkdir -p app/bin
+          echo "Downloading metatube backend..."
+
+          URL="https://github.com/metatube-community/metatube-server-releases/releases/latest/download/metatube-server-linux-amd64.zip"
+          curl -L -o metatube.zip "$URL"
+
+          echo "Extracting zip..."
+          unzip -o metatube.zip
+
+          BIN_FILE="metatube-server-linux-amd64"
+
+          if [ ! -f "$BIN_FILE" ]; then
+            echo "❌ Error: metatube binary not found after extracting!"
+            exit 1
+          fi
+
+          mv "$BIN_FILE" app/bin/metatube
+          chmod +x app/bin/metatube
+
+          echo "Metatube binary replaced successfully"
+
+      # 3️⃣ 下载 fnpack 工具
       - name: Download fnpack
+        shell: bash
         run: |
           curl -L -o fnpack-1.0.1-linux-amd64 https://static2.fnnas.com/fnpack/fnpack-1.0.1-linux-amd64
           chmod +x fnpack-1.0.1-linux-amd64
           sudo mv fnpack-1.0.1-linux-amd64 /usr/local/bin/fnpack
 
+      # 4️⃣ 资源准备
       - name: Prepare source directory
+        shell: bash
         run: |
           SRC_DIR="src-temp"
           mkdir -p "$SRC_DIR"
-          rsync -a --exclude='.git' ./ "$SRC_DIR/"
-          echo "SRC_DIR=$SRC_DIR" >> $GITHUB_ENV
 
-      - name: Build fpk
+          rsync -a --exclude='.git' ./ "$SRC_DIR/"
+          echo "SRC_DIR=$SRC_DIR" >> "$GITHUB_ENV"
+
+      # 5️⃣ 更新 manifest 版本号
+      - name: Update manifest version
+        shell: bash
         run: |
-          fnpack build -d "$SRC_DIR"
-          echo "Build finished. Searching for .fpk output..."
-          
-          FILE=$(find . -maxdepth 2 -type f -name "*.fpk" | head -n 1)
-          
-          if [ -z "$FILE" ]; then
-            echo "Error: no .fpk file generated!"
+          MANIFEST="${SRC_DIR}/manifest"
+
+          if [ ! -f "$MANIFEST" ]; then
+            echo "❌ Error: manifest file not found at $MANIFEST"
             exit 1
           fi
-          
-          echo "Found FPK: $FILE"
-          
-          cp "$FILE" /tmp/output.fpk
-          echo "FILE_PATH=/tmp/output.fpk" >> $GITHUB_ENV
 
+          echo "Updating manifest version to: ${VERSION}"
+
+          sed -i "s/^version[[:space:]]*=.*/version         = ${VERSION}/" "$MANIFEST"
+
+          echo "Updated manifest content:"
+          grep "^version" "$MANIFEST"
+
+      # 6️⃣ 构建 FPK
+      - name: Build fpk
+        shell: bash
+        run: |
+          fnpack build -d "$SRC_DIR"
+
+          echo "Build finished. Searching for .fpk output..."
+
+          FILE=$(find . -maxdepth 2 -type f -name "*.fpk" | head -n 1)
+
+          if [ -z "$FILE" ]; then
+            echo "❌ Error: no .fpk file generated!"
+            exit 1
+          fi
+
+          echo "Found FPK: $FILE"
+
+          cp "$FILE" /tmp/output.fpk
+          echo "FILE_PATH=/tmp/output.fpk" >> "$GITHUB_ENV"
+
+      # 7️⃣ 资产效验
+      - name: Delete existing release asset if exists
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo
+            const release_id = context.payload.release.id
+            const asset_name = `${repo}.fpk`
+
+            const assets = await github.rest.repos.listReleaseAssets({
+              owner,
+              repo,
+              release_id
+            })
+
+            const asset = assets.data.find(a => a.name === asset_name)
+
+            if (asset) {
+              console.log(`Deleting existing asset: ${asset.name}`)
+              await github.rest.repos.deleteReleaseAsset({
+                owner,
+                repo,
+                asset_id: asset.id
+              })
+            } else {
+              console.log("No existing asset found")
+            }
+
+      # 8️⃣ 发布 FPK 到 Release
       - name: Upload .fpk to Release Assets
         uses: actions/upload-release-asset@v1
         env:

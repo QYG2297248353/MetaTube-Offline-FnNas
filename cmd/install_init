@@ -1,19 +1,21 @@
 #!/bin/bash
 
-# 日志
+############################
+# 日志函数
+############################
+MAIN_LOG="/tmp/metatube-fnos.log"
+APP_LOG="/tmp/metatube-app.log"
+
 log_message() {
-    local message="$1"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    local log_line="${timestamp} [INSTALL_INIT] ${message}"
-    echo "${log_line}"
-    if [ -n "${TRIM_PKGTMP}" ]; then
-        mkdir -p "${TRIM_PKGTMP}"
-        echo "${log_line}" >> "${TRIM_PKGTMP}/install_init.log"
-    fi
+    local msg="$1"
+    local ts
+    ts=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "${ts} [METATUBE] ${msg}" | tee -a "${MAIN_LOG}"
 }
 
-# 基础信息
 log_message "==============安装开始=============="
+
+log_message "===================================="
 log_message "[系统] 运行用户: ${TRIM_RUN_USERNAME:-未设置}"
 log_message "[系统] 专用用户: ${TRIM_USERNAME:-未设置}"
 log_message "===================================="
@@ -45,6 +47,7 @@ log_message "[系统] 内核版本: ${TRIM_KERNEL_VERSION:-未设置}"
 log_message "[系统] 标识符: ${TRIM_SYS_MACHINE_ID:-未设置}"
 log_message "[系统] 语言: ${TRIM_SYS_LANGUAGE:-未设置}"
 log_message "===================================="
+
 log_message "==============安装开始=============="
 
 exit 0

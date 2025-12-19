@@ -3,7 +3,7 @@
         "metatube.Application": {
             "title": "MetaTube",
             "icon": "images/ICON_{0}.PNG",
-            "type": "iframe",
+            "type": "url",
             "protocol": "http",
             "port": "9524",
             "url": "/",

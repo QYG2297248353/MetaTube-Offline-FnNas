@@ -8,7 +8,7 @@
             },
             {
                 "type": "radio",
-                "field": "ammds_data_action",
+                "field": "metatube_data_action",
                 "label": "数据保留选项",
                 "initValue": "keep",
                 "options": [

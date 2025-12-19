@@ -1,177 +1,178 @@
 #!/bin/bash
 
-# 日志
+############################
+# 日志函数
+############################
+MAIN_LOG="/tmp/metatube-fnos.log"
+APP_LOG="/tmp/metatube-app.log"
+
 log_message() {
-    local message="$1"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    local log_line="${timestamp} [MAIN] ${message}"
-    echo "${log_line}"
-    if [ -n "${TRIM_PKGTMP}" ]; then
-        mkdir -p "${TRIM_PKGTMP}"
-        echo "${log_line}" >> "${TRIM_PKGTMP}/main.log"
-    fi
+    local msg="$1"
+    local ts
+    ts=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "${ts} [METATUBE] ${msg}" | tee -a "${MAIN_LOG}"
 }
 
-# 基础信息
-log_message "==============主程序=============="
-log_message "[系统] 运行用户: ${TRIM_RUN_USERNAME:-未设置}"
-log_message "[系统] 专用用户: ${TRIM_USERNAME:-未设置}"
-log_message "===================================="
-log_message "[应用] 名称: ${TRIM_APPNAME:-未设置}"
-log_message "[应用] 版本: ${TRIM_APPVER:-未设置}"
-log_message "[应用] 状态: ${TRIM_APP_STATUS:-未设置}"
-log_message "[应用] 端口: ${TRIM_SERVICE_PORT:-未设置}"
-log_message "[应用] 用户: ${TRIM_RUN_USERNAME:-未设置} (UID: ${TRIM_RUN_UID:-未设置})"
-log_message "===================================="
-log_message "[目录] 执行文件: ${TRIM_APPDEST:-未设置}"
-log_message "[目录] 配置文件: ${TRIM_PKGETC:-未设置}"
-log_message "[目录] 动态数据: ${TRIM_PKGVAR:-未设置}"
-log_message "[目录] 临时文件: ${TRIM_PKGTMP:-未设置}"
-log_message "[目录] 用户数据: ${TRIM_PKGHOME:-未设置}"
-log_message "[目录] 元数据: ${TRIM_PKGMETA:-未设置}"
-log_message "[目录] 存储空间: ${TRIM_APPDEST_VOL:-未设置}"
-log_message "[目录] 数据共享: ${TRIM_DATA_SHARE_PATHS:-未设置}"
-log_message "[目录] 系统日志文件: ${TRIM_TEMP_LOGFILE:-未设置}"
-log_message "[目录] 升级临时: ${TRIM_TEMP_UPGRADE_FOLDER:-未设置}"
-log_message "[目录] 安装临时: ${TRIM_PKGINST_TEMP_DIR:-未设置}"
-log_message "[目录] FPK解压: ${TRIM_TEMP_TPKFILE:-未设置}"
-log_message "===================================="
-log_message "[系统] 版本: ${TRIM_SYS_VERSION:-未设置}"
-log_message "[系统] 主版本: ${TRIM_SYS_VERSION_MAJOR:-未设置}"
-log_message "[系统] 次版本: ${TRIM_SYS_VERSION_MINOR:-未设置}"
-log_message "[系统] 构建版本: ${TRIM_SYS_VERSION_BUILD:-未设置}"
-log_message "[系统] 架构: ${TRIM_SYS_ARCH:-未设置}"
-log_message "[系统] 内核版本: ${TRIM_KERNEL_VERSION:-未设置}"
-log_message "[系统] 标识符: ${TRIM_SYS_MACHINE_ID:-未设置}"
-log_message "[系统] 语言: ${TRIM_SYS_LANGUAGE:-未设置}"
-log_message "===================================="
-log_message "==============主程序=============="
 
-LOG_FILE="${TRIM_PKGVAR}/info.log"
+log_message "==============主程序启动=============="
+############################
+# 基本变量
+############################
+LOG_FILE="${APP_LOG}"
 PID_FILE="${TRIM_PKGVAR}/app.pid"
 
-# 应用程序路径
 APP_BIN="${TRIM_APPDEST}/bin/metatube"
-# 数据库路径
-DB_PATH="${TRIM_APPDEST_VOL}/@appshare/metatube/db/metatube.db"
-# 端口
+WORK_DIR="${TRIM_APPDEST_VOL}/@appshare/metatube"
+
+DB_PATH="${WORK_DIR}/db/metatube.db"
 PORT="${metatube_app_port}"
-# Token（来自环境变量）
 TOKEN="${metatube_password}"
-# 请求超时时间
 REQUEST_TIMEOUT="1m"
-# 网络代理
 HTTP_PROXY_VALUE="${metatube_proxy}"
 
-# 创建数据库目录（如果不存在）
 mkdir -p "$(dirname "${DB_PATH}")"
+mkdir -p "${WORK_DIR}"
 
-start_process() {
-    if status; then
-        log_message "应用程序已在运行"
-        return 0
-    fi
-
-    log_message "正在启动应用程序..."
-    
-    HTTP_PROXY="${HTTP_PROXY_VALUE}" HTTPS_PROXY="${HTTP_PROXY_VALUE}" \
-    "${APP_BIN}" \
-      -dsn "${DB_PATH}" \
-      -port "${PORT}" \
-      -token "${TOKEN}" \
-      -request-timeout "${REQUEST_TIMEOUT}" \
-      >> "${LOG_FILE}" 2>&1 &
-    
-    # 保存进程ID
-    printf "%s" "$!" > "${PID_FILE}"
-    
-    log_message "应用程序已启动，PID: $!"
-    return 0
-}
-
-stop_process() {
-    log_message "正在停止应用程序..."
-
-    if [ -r "${PID_FILE}" ]; then
-        pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
-        
-        log_message "PID: ${pid}"
-        if ! check_process "${pid}"; then
-            rm -f "${PID_FILE}"
-            log_message "PID文件已移除"
-            return
-        fi
-
-        log_message "向PID ${pid} 发送 TERM 信号..."
-        kill -TERM "${pid}" >> "${LOG_FILE}" 2>&1
-
-        local count=0
-        while check_process "${pid}" && [ $count -lt 10 ]; do
-            sleep 1
-            count=$((count + 1))
-            log_message "等待进程终止... (${count}s/10s)"
-        done
-
-        if check_process "${pid}"; then
-            log_message "向PID ${pid} 发送 KILL 信号..."
-            kill -KILL "${pid}"
-            sleep 1
-            rm -f "${PID_FILE}"
-            log_message "强制杀死进程"
-        else
-            log_message "进程已正常终止"
-        fi
-    else
-        log_message "未找到PID文件"
-    fi
-
-    return 0
-}
-
+############################
+# 工具函数
+############################
 check_process() {
-    local pid=$1
-    if kill -0 "${pid}" 2>/dev/null; then
-        return 0
-    else
-        return 1
-    fi
+    local pid="$1"
+    kill -0 "${pid}" 2>/dev/null
 }
 
+############################
+# 状态检测
+############################
 status() {
     if [ -f "${PID_FILE}" ]; then
-        pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
-        if check_process "${pid}"; then
-            log_message "应用程序正在运行 (PID: ${pid})"
+        local pid
+        pid=$(tr -d '[:space:]' < "${PID_FILE}")
+
+        if [ -n "${pid}" ] && check_process "${pid}"; then
+            log_message "应用正在运行 (PID=${pid})"
             return 0
         else
+            log_message "发现过期 PID，已清理"
             rm -f "${PID_FILE}"
-            log_message "清理过期的PID文件"
-        fi    
+        fi
     fi
 
-    log_message "应用程序未运行"
+    log_message "应用未运行"
+    return 3
+}
+
+############################
+# 启动程序
+############################
+start_process() {
+    if status >/dev/null 2>&1; then
+        log_message "应用已在运行，跳过启动"
+        return 0
+    fi
+
+    log_message "准备启动应用"
+    log_message "BIN=${APP_BIN}"
+    log_message "WORK_DIR=${WORK_DIR}"
+    log_message "PORT=${PORT}"
+
+    if [ ! -x "${APP_BIN}" ]; then
+        log_message "启动失败：程序不可执行 ${APP_BIN}"
+        return 1
+    fi
+
+    cd "${WORK_DIR}" || {
+        log_message "启动失败：无法进入工作目录"
+        return 1
+    }
+
+    : > "${APP_LOG}"
+
+    HTTP_PROXY="${HTTP_PROXY_VALUE}" \
+    HTTPS_PROXY="${HTTP_PROXY_VALUE}" \
+    "${APP_BIN}" \
+        -dsn "${DB_PATH}" \
+        -port "${PORT}" \
+        -token "${TOKEN}" \
+        -request-timeout "${REQUEST_TIMEOUT}" \
+        >> "${APP_LOG}" 2>&1 &
+
+    local pid=$!
+    sleep 1
+
+    if check_process "${pid}"; then
+        echo "${pid}" > "${PID_FILE}"
+        log_message "启动成功 (PID=${pid})"
+        return 0
+    fi
+
+    log_message "启动失败：进程已退出"
+    log_message "===== 最近 50 行程序日志 ====="
+    tail -n 50 "${APP_LOG}" | while read -r line; do
+        log_message "APPLOG: ${line}"
+    done
+    log_message "================================"
+
     return 1
 }
 
-case $1 in
-start)
-    # 启动命令。成功退出码0，失败退出码1
-    start_process
-    ;;
-stop)
-    # 停止命令。成功退出码0，失败退出码1
-    stop_process
-    ;;
-status)
-    # 检查应用状态命令。运行中退出码0，未运行退出码3
-    if status; then 
-        exit 0
-    else 
-        exit 3
+############################
+# 停止程序
+############################
+stop_process() {
+    log_message "停止应用"
+
+    if [ ! -f "${PID_FILE}" ]; then
+        log_message "未找到 PID 文件，认为已停止"
+        return 0
     fi
-    ;;
-*)
-    log_message "未知命令: $1"
-    exit 1
-    ;;
+
+    local pid
+    pid=$(tr -d '[:space:]' < "${PID_FILE}")
+
+    if ! check_process "${pid}"; then
+        log_message "进程不存在，清理 PID"
+        rm -f "${PID_FILE}"
+        return 0
+    fi
+
+    log_message "发送 TERM 给 PID=${pid}"
+    kill -TERM "${pid}"
+
+    for i in $(seq 1 10); do
+        if ! check_process "${pid}"; then
+            log_message "进程已正常退出"
+            rm -f "${PID_FILE}"
+            return 0
+        fi
+        sleep 1
+    done
+
+    log_message "TERM 超时，发送 KILL"
+    kill -KILL "${pid}" 2>/dev/null
+    rm -f "${PID_FILE}"
+
+    return 0
+}
+
+############################
+# 命令入口
+############################
+case "$1" in
+    start)
+        start_process
+        exit $?
+        ;;
+    stop)
+        stop_process
+        exit $?
+        ;;
+    status)
+        status
+        exit $?
+        ;;
+    *)
+        log_message "未知命令: $1 (start|stop|status)"
+        exit 1
+        ;;
 esac
